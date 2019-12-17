@@ -19,19 +19,20 @@ import { FileSystem, FileStat } from '@theia/filesystem/lib/common';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import URI from '@theia/core/lib/common/uri';
-import { isWindows } from '@theia/core';
 import { PluginPaths } from './const';
 import { PluginPathsService } from '../../common/plugin-paths-protocol';
 import { THEIA_EXT, VSCODE_EXT, getTemporaryWorkspaceFileUri } from '@theia/workspace/lib/common';
+import { EnvVariablesServer } from '@theia/core/lib/common/env-variables';
 
 // Service to provide configuration paths for plugin api.
 @injectable()
 export class PluginPathsServiceImpl implements PluginPathsService {
 
-    private readonly windowsDataFolders = [PluginPaths.WINDOWS_APP_DATA_DIR, PluginPaths.WINDOWS_ROAMING_DIR];
-
     @inject(FileSystem)
     protected readonly fileSystem: FileSystem;
+
+    @inject(EnvVariablesServer)
+    protected readonly envServer: EnvVariablesServer;
 
     async getHostLogPath(): Promise<string> {
         const parentLogsDir = await this.getLogsDirPath();
@@ -71,8 +72,8 @@ export class PluginPathsServiceImpl implements PluginPathsService {
     }
 
     protected async buildWorkspaceId(workspace: FileStat, roots: FileStat[]): Promise<string> {
-        const homeDir = await this.getUserHomeDir();
-        const untitledWorkspace = getTemporaryWorkspaceFileUri(new URI(homeDir));
+        const userDataDirPath = await this.envServer.getUserDataFolderPath();
+        const untitledWorkspace = getTemporaryWorkspaceFileUri(userDataDirPath);
 
         if (untitledWorkspace.toString() === workspace.uri) {
             // if workspace is temporary
@@ -99,31 +100,13 @@ export class PluginPathsServiceImpl implements PluginPathsService {
     }
 
     private async getLogsDirPath(): Promise<string> {
-        const theiaDir = await this.getTheiaDirPath();
+        const theiaDir = await this.envServer.getUserDataFolderPath();
         return path.join(theiaDir, PluginPaths.PLUGINS_LOGS_DIR);
     }
 
     private async getWorkspaceStorageDirPath(): Promise<string> {
-        const theiaDir = await this.getTheiaDirPath();
+        const theiaDir = await this.envServer.getUserDataFolderPath();
         return path.join(theiaDir, PluginPaths.PLUGINS_WORKSPACE_STORAGE_DIR);
-    }
-
-    async getTheiaDirPath(): Promise<string> {
-        const homeDir = await this.getUserHomeDir();
-        return path.join(
-            homeDir,
-            ...(isWindows ? this.windowsDataFolders : ['']),
-            PluginPaths.THEIA_DIR
-        );
-    }
-
-    private async getUserHomeDir(): Promise<string> {
-        const homeDirStat = await this.fileSystem.getCurrentUserHome();
-        if (!homeDirStat) {
-            throw new Error('Unable to get user home directory');
-        }
-        const homeDirPath = await this.fileSystem.getFsPath(homeDirStat.uri);
-        return homeDirPath!;
     }
 
 }

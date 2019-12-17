@@ -27,6 +27,7 @@ import URI from '@theia/core/lib/common/uri';
 import { FileChange, FileChangeType } from '@theia/filesystem/lib/common/filesystem-watcher-protocol';
 import { WorkspaceService } from '@theia/workspace/lib/browser';
 import { OpenerService } from '@theia/core/lib/browser';
+import { EnvVariablesServer } from '@theia/core/lib/common/env-variables';
 
 export interface TaskConfigurationClient {
     /**
@@ -54,7 +55,7 @@ export class TaskConfigurations implements Disposable {
     protected taskCustomizationMap = new Map<string, TaskCustomization[]>();
 
     /** last directory element under which we look for task config */
-    protected readonly TASKFILEPATH = '.theia';
+    protected taskFilePath: string;
     /** task configuration file name */
     protected readonly TASKFILE = 'tasks.json';
 
@@ -90,6 +91,9 @@ export class TaskConfigurations implements Disposable {
     @inject(TaskSourceResolver)
     protected readonly taskSourceResolver: TaskSourceResolver;
 
+    @inject(EnvVariablesServer)
+    protected readonly envServer: EnvVariablesServer;
+
     constructor() {
         this.toDispose.push(Disposable.create(() => {
             this.tasksMap.clear();
@@ -100,7 +104,7 @@ export class TaskConfigurations implements Disposable {
     }
 
     @postConstruct()
-    protected init(): void {
+    protected async init(): Promise<void> {
         this.toDispose.push(
             this.taskConfigurationManager.onDidChangeTaskConfig(async change => {
                 try {
@@ -115,6 +119,7 @@ export class TaskConfigurations implements Disposable {
         );
         this.reorgnizeTasks();
         this.toDispose.push(this.taskSchemaUpdater.onDidChangeTaskSchema(() => this.reorgnizeTasks()));
+        this.taskFilePath = await this.envServer.getDataFolderName();
     }
 
     setClient(client: TaskConfigurationClient): void {
@@ -235,7 +240,7 @@ export class TaskConfigurations implements Disposable {
 
     /** returns the string uri of where the config file would be, if it existed under a given root directory */
     protected getConfigFileUri(rootDir: string): string {
-        return new URI(rootDir).resolve(this.TASKFILEPATH).resolve(this.TASKFILE).toString();
+        return new URI(rootDir).resolve(this.taskFilePath).resolve(this.TASKFILE).toString();
     }
 
     /**
